@@ -216,16 +216,26 @@ const GSAnalyzer = {
 };
 
 function runScreening(opts) {
+    return runScreeningWithData(SAMPLE_STOCKS, opts);
+}
+
+function runScreeningWithData(stockData, opts) {
     const params = GS_CONFIG.RISK_PARAMS[opts.risk] || GS_CONFIG.RISK_PARAMS["medium-high"];
-    const stocks = Object.values(SAMPLE_STOCKS);
+    const stocks = Object.values(stockData);
 
     // Filter by sector if specified
     let universe = opts.sectors && opts.sectors.length
         ? stocks.filter(s => opts.sectors.includes(s.sector))
         : stocks;
 
-    // Analyze
-    let results = universe.map(sd => GSAnalyzer.analyze(sd)).filter(Boolean);
+    // Analyze and attach source metadata
+    let results = universe.map(sd => {
+        const a = GSAnalyzer.analyze(sd);
+        if (a) {
+            a._source = sd; // Attach source data for live/cached/sample badge
+        }
+        return a;
+    }).filter(Boolean);
 
     // Apply filters
     results = results.filter(a => {
