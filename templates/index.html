@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Goldman Sachs Style - Stock Screening Tool</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="gs-header">
+        <div class="header-inner">
+            <div class="logo-section">
+                <div class="logo-icon">GS</div>
+                <div>
+                    <h1>Equity Screening Tool</h1>
+                    <p class="subtitle">股票筛选研究系统</p>
+                </div>
+            </div>
+            <div class="market-bar" id="marketBar"></div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Screening Panel -->
+        <section class="panel screening-panel">
+            <h2 class="panel-title">投资者概况 / Investor Profile</h2>
+            <form id="screenForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>风险承受能力</label>
+                        <select id="risk" name="risk">
+                            <option value="low">低 (Low)</option>
+                            <option value="medium-low">中低 (Medium-Low)</option>
+                            <option value="medium">中等 (Medium)</option>
+                            <option value="medium-high" selected>中高 (Medium-High)</option>
+                            <option value="high">高 (High)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>最低目标年化收益 (%)</label>
+                        <input type="number" id="returnMin" value="15" min="1" max="100" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label>最高目标年化收益 (%)</label>
+                        <input type="number" id="returnMax" value="20" min="1" max="100" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label>推荐股票数量</label>
+                        <input type="number" id="top" value="15" min="1" max="25" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label>投资期限 (年)</label>
+                        <input type="number" id="horizon" value="3" min="1" max="10" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label>仅派息股票</label>
+                        <select id="requireDividend">
+                            <option value="false" selected>否</option>
+                            <option value="true">是</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group sectors-group">
+                    <label>聚焦行业 (留空则扫描全部)</label>
+                    <div class="sector-tags" id="sectorTags">
+                        {% for sector in sectors %}
+                        <button type="button" class="sector-tag" data-sector="{{ sector }}">{{ sector }}</button>
+                        {% endfor %}
+                    </div>
+                </div>
+                <button type="submit" class="btn-primary" id="runBtn">
+                    <span class="btn-text">开始筛选 / Run Screening</span>
+                    <span class="btn-loading" style="display:none;">分析中...</span>
+                </button>
+            </form>
+        </section>
+
+        <!-- Loading State -->
+        <section class="panel loading-panel" id="loadingPanel" style="display:none;">
+            <div class="loading-content">
+                <div class="spinner"></div>
+                <p id="loadingText">正在扫描市场数据...</p>
+                <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+            </div>
+        </section>
+
+        <!-- Results Section -->
+        <div id="resultsSection" style="display:none;">
+            <!-- Report Header -->
+            <section class="panel report-header-panel">
+                <div class="report-badge">CONFIDENTIAL</div>
+                <h2>股票筛选研究报告</h2>
+                <p class="report-subtitle">EQUITY SCREENING REPORT</p>
+                <div class="report-meta" id="reportMeta"></div>
+            </section>
+
+            <!-- Executive Summary -->
+            <section class="panel">
+                <h2 class="panel-title">执行摘要 / Executive Summary</h2>
+                <div class="summary-cards" id="summaryCards"></div>
+                <div class="top3-list" id="top3List"></div>
+            </section>
+
+            <!-- Summary Table -->
+            <section class="panel">
+                <h2 class="panel-title">综合汇总表 / Screening Summary</h2>
+                <div class="table-wrapper">
+                    <table class="gs-table" id="summaryTable">
+                        <thead>
+                            <tr>
+                                <th>#</th><th>代码</th><th>公司名称</th><th>行业</th>
+                                <th>现价($)</th><th>综合分</th><th>推荐</th>
+                                <th>风险</th><th>上行%</th><th>护城河</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Tabs for detailed analysis -->
+            <section class="panel">
+                <div class="tabs">
+                    <button class="tab active" data-tab="peTab">P/E 估值</button>
+                    <button class="tab" data-tab="growthTab">收入增长</button>
+                    <button class="tab" data-tab="debtTab">债务健康</button>
+                    <button class="tab" data-tab="dividendTab">股息分析</button>
+                    <button class="tab" data-tab="moatTab">竞争护城河</button>
+                    <button class="tab" data-tab="targetTab">目标价</button>
+                    <button class="tab" data-tab="riskTab">风险评级</button>
+                    <button class="tab" data-tab="entryTab">入场/止损</button>
+                </div>
+
+                <!-- P/E Tab -->
+                <div class="tab-content active" id="peTab">
+                    <div class="table-wrapper">
+                        <table class="gs-table" id="peTable">
+                            <thead><tr>
+                                <th>代码</th><th>当前P/E</th><th>远期P/E</th>
+                                <th>行业均值</th><th>溢价/折价</th><th>估值判断</th>
+                            </tr></thead><tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Growth Tab -->
+                <div class="tab-content" id="growthTab">
+                    <div class="table-wrapper">
+                        <table class="gs-table" id="growthTable">
+                            <thead><tr>
+                                <th>代码</th><th>5年CAGR</th><th>增长趋势</th><th>近年收入趋势</th>
+                            </tr></thead><tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Debt Tab -->
+                <div class="tab-content" id="debtTab">
+                    <div class="table-wrapper">
+                        <table class="gs-table" id="debtTable">
+                            <thead><tr>
+                                <th>代码</th><th>债务/权益比</th><th>健康状态</th>
+                                <th>健康分数</th><th>流动比率</th>
+                            </tr></thead><tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Dividend Tab -->
+                <div class="tab-content" id="dividendTab">
+                    <div class="table-wrapper">
+                        <table class="gs-table" id="dividendTable">
+                            <thead><tr>
+                                <th>代码</th><th>股息率</th><th>派息比率</th>
+                                <th>可持续性</th><th>可持续分数</th>
+                            </tr></thead><tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Moat Tab -->
+                <div class="tab-content" id="moatTab">
+                    <div class="table-wrapper">
+                        <table class="gs-table" id="moatTable">
+                            <thead><tr>
+                                <th>代码</th><th>护城河</th><th>综合分</th>
+                                <th>品牌</th><th>转换成本</th><th>网络效应</th>
+                                <th>成本优势</th><th>市场主导</th>
+                            </tr></thead><tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Target Tab -->
+                <div class="tab-content" id="targetTab">
+                    <div class="table-wrapper">
+                        <table class="gs-table" id="targetTable">
+                            <thead><tr>
+                                <th>代码</th><th>现价($)</th><th>看跌目标</th>
+                                <th>基准目标</th><th>看涨目标</th><th>下行风险</th><th>上行空间</th>
+                            </tr></thead><tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Risk Tab -->
+                <div class="tab-content" id="riskTab">
+                    <div class="table-wrapper">
+                        <table class="gs-table" id="riskTable">
+                            <thead><tr>
+                                <th>代码</th><th>风险评分</th><th>风险等级</th>
+                                <th>Beta</th><th>主要风险因素</th>
+                            </tr></thead><tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Entry Tab -->
+                <div class="tab-content" id="entryTab">
+                    <div class="table-wrapper">
+                        <table class="gs-table" id="entryTable">
+                            <thead><tr>
+                                <th>代码</th><th>现价($)</th><th>入场低价</th>
+                                <th>入场高价</th><th>止损价</th><th>止损幅度</th>
+                            </tr></thead><tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Individual Stock Detail Modal -->
+            <section class="panel" id="stockDetailSection" style="display:none;">
+                <h2 class="panel-title">个股详细分析 / Stock Detail</h2>
+                <div id="stockDetail"></div>
+            </section>
+
+            <!-- Sector Allocation -->
+            <section class="panel">
+                <h2 class="panel-title">行业配置 / Sector Allocation</h2>
+                <div id="sectorAllocation" class="sector-alloc"></div>
+            </section>
+
+            <!-- Disclaimer -->
+            <section class="panel disclaimer-panel">
+                <h3>免责声明 / Disclaimer</h3>
+                <p>本报告仅供参考，不构成任何投资建议。所有数据来源于公开市场信息，分析结果基于量化模型，可能存在偏差。投资者应根据自身情况做出独立判断，并承担相应投资风险。过往表现不代表未来收益。</p>
+                <p>This report is for informational purposes only and does not constitute investment advice. All data is sourced from public market information. Past performance is not indicative of future results.</p>
+            </section>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="gs-footer">
+        <p>Goldman Sachs Style Stock Screening Tool &copy; 2026 | For Educational Purposes Only</p>
+    </footer>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
