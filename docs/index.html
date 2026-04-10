@@ -13,13 +13,50 @@
                 <div class="logo-icon">GS</div>
                 <div>
                     <h1>Equity Screening Tool</h1>
-                    <p class="subtitle">股票筛选研究系统 | Client-Side Edition</p>
+                    <p class="subtitle">股票筛选研究系统 | Live Data Edition</p>
                 </div>
             </div>
             <div class="market-bar" id="marketBar"></div>
         </div>
     </header>
     <main class="container">
+        <!-- Data Source Configuration -->
+        <section class="panel data-source-panel">
+            <h2 class="panel-title">数据源配置 / Data Source</h2>
+            <div class="data-source-status" id="dataSourceStatus">
+                <span class="status-dot offline"></span>
+                <span id="dataStatusText">离线模式 — 使用内置样本数据</span>
+                <span class="last-update" id="lastUpdateTime"></span>
+            </div>
+            <div class="api-key-section">
+                <div class="form-grid" style="grid-template-columns: 1fr auto auto;">
+                    <div class="form-group">
+                        <label>FinnHub API Key（<a href="https://finnhub.io/register" target="_blank" style="color:var(--gs-blue)">免费注册获取</a>）</label>
+                        <input type="password" id="apiKeyInput" placeholder="输入 API Key 启用实时数据..." value="">
+                    </div>
+                    <div class="form-group" style="align-self:end">
+                        <button type="button" class="btn-secondary" id="saveKeyBtn">保存并验证</button>
+                    </div>
+                    <div class="form-group" style="align-self:end">
+                        <button type="button" class="btn-secondary btn-outline" id="clearCacheBtn">清除缓存</button>
+                    </div>
+                </div>
+                <div id="keyValidation" class="key-validation"></div>
+            </div>
+            <div class="refresh-controls">
+                <label class="toggle-label">
+                    <input type="checkbox" id="autoRefreshToggle"> 自动刷新
+                </label>
+                <select id="refreshInterval" style="width:auto;padding:4px 8px;font-size:0.82rem;background:var(--gs-darker);border:1px solid var(--gs-panel-border);border-radius:4px;color:var(--gs-text);">
+                    <option value="60">每1分钟</option>
+                    <option value="300" selected>每5分钟</option>
+                    <option value="600">每10分钟</option>
+                    <option value="1800">每30分钟</option>
+                </select>
+                <span class="dim" style="font-size:0.78rem;margin-left:0.5rem" id="refreshCountdown"></span>
+            </div>
+        </section>
+
         <section class="panel screening-panel">
             <h2 class="panel-title">投资者概况 / Investor Profile</h2>
             <form id="screenForm">
@@ -84,6 +121,7 @@
     </main>
     <footer class="gs-footer"><p>Goldman Sachs Style Stock Screening Tool | GitHub Pages Edition | For Educational Purposes Only</p></footer>
     <script src="js/data.js"></script>
+    <script src="js/live_data.js"></script>
     <script src="js/analyzer.js"></script>
     <script src="js/app.js"></script>
 </body>
