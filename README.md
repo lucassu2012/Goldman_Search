@@ -1,6 +1,6 @@
 # Goldman Sachs Style Stock Screening Tool
 
-A professional-grade equity screening and analysis system that generates comprehensive research reports.
+A professional-grade equity screening and analysis system with both CLI and Web interfaces.
 
 ## Features
 
@@ -19,10 +19,18 @@ A professional-grade equity screening and analysis system that generates compreh
 
 ```bash
 pip install -r requirements.txt
-python main.py
 ```
 
-## Usage
+### Web Application (Online Version)
+
+```bash
+# Start the web server
+python app.py
+
+# Open in browser: http://localhost:5000
+```
+
+### Command Line Interface
 
 ```bash
 # Default: medium-high risk, 15-20% target return
@@ -41,7 +49,40 @@ python main.py --top 20 --save
 python main.py --quick
 ```
 
-## Options
+## Web Interface Screenshots
+
+The web interface features a professional Goldman Sachs dark theme with:
+- Interactive investor profile configuration
+- Real-time screening with animated progress
+- 8 tabbed analysis views (P/E, Growth, Debt, Dividend, Moat, Targets, Risk, Entry/SL)
+- Click any stock row to view detailed individual analysis
+- Sector allocation visualization
+- Fully responsive design for mobile/tablet
+
+## Deploy to Cloud
+
+### Render (Recommended)
+
+1. Fork this repository
+2. Go to [render.com](https://render.com) and create a new Web Service
+3. Connect your GitHub repo
+4. Render will auto-detect `render.yaml` and deploy
+
+### Heroku
+
+```bash
+heroku create your-app-name
+git push heroku main
+```
+
+### Docker
+
+```bash
+docker build -t goldman-screener .
+docker run -p 5000:5000 goldman-screener
+```
+
+## CLI Options
 
 | Flag | Description | Default |
 |------|-------------|---------|
@@ -59,16 +100,24 @@ python main.py --quick
 ## Architecture
 
 ```
+app.py                # Flask web application entry point
+main.py               # CLI entry point
 src/
   config.py           # Investor profiles, stock universe, screening parameters
   data_fetcher.py     # Yahoo Finance API + auto-fallback to sample data
   sample_data.py      # Built-in market data for offline environments
   analyzer.py         # Core analysis engine (P/E, growth, D/E, moat, risk)
   screener.py         # Filtering and ranking engine
-  report_generator.py # Professional report formatting
-main.py               # CLI entry point
+  report_generator.py # Professional report formatting (CLI)
+static/
+  css/style.css       # Goldman Sachs dark theme
+  js/app.js           # Frontend application logic
+templates/
+  index.html          # Web interface template
 tests/
   test_screener.py    # Unit tests
+Procfile              # Heroku/Render deployment
+render.yaml           # Render auto-deploy config
 ```
 
 ## Running Tests
@@ -76,3 +125,7 @@ tests/
 ```bash
 python tests/test_screener.py
 ```
+
+## Disclaimer
+
+This tool is for educational and informational purposes only. It does not constitute investment advice. All data is sourced from public market information. Past performance is not indicative of future results.
