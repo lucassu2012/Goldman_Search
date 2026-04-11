@@ -59,7 +59,8 @@
         if (lastUpdate) timeEl.textContent = "最后更新: " + fmtTime(lastUpdate);
     }
 
-    $("#clearCacheBtn").addEventListener("click", () => {
+    const clearBtn = $("#clearCacheBtn");
+    if (clearBtn) clearBtn.addEventListener("click", () => {
         LiveData.clearAllCache();
         updateDataStatus();
     });
@@ -67,7 +68,8 @@
     // ─── Auto Refresh ────────────────────────────────────────
     let _nextRefreshAt = 0;
 
-    $("#autoRefreshToggle").addEventListener("change", (e) => {
+    const arToggle = $("#autoRefreshToggle");
+    if (arToggle) arToggle.addEventListener("change", (e) => {
         if (e.target.checked) startAutoRefresh();
         else stopAutoRefresh();
     });
@@ -117,19 +119,23 @@
 
     // ─── Market Bar ──────────────────────────────────────────
     (function renderMarketBar() {
-        const bar = $("#marketBar");
-        if (!bar) return;
-        bar.innerHTML = Object.entries(SAMPLE_MARKET_INDICES).map(([name, d]) => {
-            const cls = d.change_pct >= 0 ? "positive" : "negative";
-            const sign = d.change_pct >= 0 ? "+" : "";
-            return `<span class="market-item"><span class="name">${name}</span> <span class="${cls}">${d.price.toLocaleString("en-US",{minimumFractionDigits:2})}</span> <span class="${cls}">(${sign}${d.change_pct.toFixed(2)}%)</span></span>`;
-        }).join("");
+        try {
+            const bar = $("#marketBar");
+            if (!bar || typeof SAMPLE_MARKET_INDICES === "undefined") return;
+            bar.innerHTML = Object.entries(SAMPLE_MARKET_INDICES).map(([name, d]) => {
+                const cls = d.change_pct >= 0 ? "positive" : "negative";
+                const sign = d.change_pct >= 0 ? "+" : "";
+                return `<span class="market-item"><span class="name">${name}</span> <span class="${cls}">${d.price.toLocaleString("en-US",{minimumFractionDigits:2})}</span> <span class="${cls}">(${sign}${d.change_pct.toFixed(2)}%)</span></span>`;
+            }).join("");
+        } catch (e) { console.warn("Market bar error:", e); }
     })();
 
     // ─── Form Submit ─────────────────────────────────────────
-    $("#screenForm").addEventListener("submit", e => { e.preventDefault(); doScreen(false); });
+    const screenForm = $("#screenForm");
+    if (screenForm) screenForm.addEventListener("submit", e => { e.preventDefault(); doScreen(false); });
 
     async function doScreen(isRefresh) {
+      try {
         const btn = $("#runBtn"), btnT = btn.querySelector(".btn-text"), btnL = btn.querySelector(".btn-loading");
         btn.disabled = true; btnT.style.display = "none"; btnL.style.display = "inline";
         $("#loadingPanel").style.display = "block";
@@ -147,12 +153,13 @@
         };
         _lastScreenOpts = opts;
 
-        const useLive = LiveData.hasApiKey();
+        const useLive = typeof LiveData !== "undefined" && LiveData.hasApiKey();
         const tickers = Object.keys(SAMPLE_STOCKS);
 
         let liveStocks = {};
         if (useLive) {
-            $(".status-dot").className = "status-dot loading";
+            const dot = $(".status-dot");
+            if (dot) dot.className = "status-dot loading";
             $("#loadingText").textContent = "正在获取实时市场数据...";
 
             try {
@@ -229,6 +236,13 @@
             // Start auto-refresh if toggle is on
             if ($("#autoRefreshToggle").checked && !_autoRefreshTimer) startAutoRefresh();
         }, 200);
+      } catch (err) {
+        console.error("doScreen error:", err);
+        $("#loadingPanel").style.display = "none";
+        const btn = $("#runBtn");
+        if (btn) { btn.disabled = false; btn.querySelector(".btn-text").style.display = "inline"; btn.querySelector(".btn-loading").style.display = "none"; }
+        alert("筛选过程出错: " + err.message);
+      }
     }
 
     // ─── Rendering Functions ─────────────────────────────────
@@ -441,5 +455,5 @@
     }
 
     // ─── Init ────────────────────────────────────────────────
-    updateDataStatus();
+    try { updateDataStatus(); } catch (e) { console.warn("Init status error:", e); }
 })();
