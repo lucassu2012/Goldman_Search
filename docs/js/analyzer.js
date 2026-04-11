@@ -1,13 +1,16 @@
 /**
  * Goldman Sachs Stock Screener - Client-Side Analysis Engine
- * Ports the Python analyzer/screener to pure JavaScript.
+ * Enhanced with OpenBB-inspired analysis modules:
+ * Technical, Valuation, Quality, Cash Flow, Analyst Consensus
  */
 const GSAnalyzer = {
     analyze(sd) {
         const a = {
             ticker: sd.ticker, name: sd.name, sector: sd.sector, industry: sd.industry,
             current_price: sd.current_price, market_cap_billions: sd.market_cap_billions,
-            beta: sd.beta, roe: sd.roe, profit_margin: sd.profit_margin,
+            beta: sd.beta, roe: sd.roe, roa: sd.roa, roic: sd.roic,
+            profit_margin: sd.profit_margin, operating_margin: sd.operating_margin,
+            gross_margin: sd.gross_margin,
         };
         this._pe(a, sd);
         this._growth(a, sd);
@@ -17,6 +20,12 @@ const GSAnalyzer = {
         this._targets(a, sd);
         this._risk(a, sd);
         this._entry(a, sd);
+        // New OpenBB-inspired modules
+        this._technical(a, sd);
+        this._valuation(a, sd);
+        this._quality(a, sd);
+        this._cashflow(a, sd);
+        this._analyst(a, sd);
         this._composite(a);
         return a;
     },
@@ -34,6 +43,12 @@ const GSAnalyzer = {
     },
 
     _growth(a, sd) {
+        // Use FinnHub multi-year growth rates when available
+        a.revenue_growth_3y = sd.revenue_growth_3y != null ? +(sd.revenue_growth_3y * 100).toFixed(1) : null;
+        a.revenue_growth_5y_api = sd.revenue_growth_5y != null ? +(sd.revenue_growth_5y * 100).toFixed(1) : null;
+        a.eps_growth_3y = sd.eps_growth_3y != null ? +(sd.eps_growth_3y * 100).toFixed(1) : null;
+        a.eps_growth_5y = sd.eps_growth_5y != null ? +(sd.eps_growth_5y * 100).toFixed(1) : null;
+
         const fin = HISTORICAL_FINANCIALS[sd.ticker];
         if (fin && fin.annual_revenue && fin.annual_revenue.length >= 2) {
             const revs = fin.annual_revenue.filter(r => r != null && r > 0);
@@ -51,7 +66,11 @@ const GSAnalyzer = {
                 return;
             }
         }
-        if (sd.revenue_growth != null) {
+        // Fallback to API growth
+        if (a.revenue_growth_5y_api != null) {
+            a.revenue_5y_cagr = a.revenue_growth_5y_api;
+            a.revenue_trend = a.revenue_5y_cagr > 15 ? "高速增长" : a.revenue_5y_cagr > 5 ? "稳定增长" : a.revenue_5y_cagr > 0 ? "低速增长" : "收入下滑";
+        } else if (sd.revenue_growth != null) {
             const g = sd.revenue_growth * 100;
             a.revenue_5y_cagr = +g.toFixed(1);
             a.revenue_trend = g > 15 ? "高速增长" : g > 5 ? "稳定增长" : g > 0 ? "低速增长" : "收入下滑";
@@ -71,10 +90,13 @@ const GSAnalyzer = {
             else { a.de_health = "危险"; a.de_health_score = 10; }
         } else { a.de_health = "数据不足"; a.de_health_score = 50; }
         a.current_ratio = sd.current_ratio;
+        a.quick_ratio = sd.quick_ratio;
+        a.interest_coverage = sd.interest_coverage;
     },
 
     _dividend(a, sd) {
         a.dividend_yield = sd.dividend_yield ? +(sd.dividend_yield * 100).toFixed(2) : 0;
+        a.dividend_growth_5y = sd.dividend_growth_5y != null ? +(sd.dividend_growth_5y * 100).toFixed(1) : null;
         const pr = sd.payout_ratio;
         if (pr != null) {
             a.payout_ratio = +(pr < 5 ? pr * 100 : pr).toFixed(1);
@@ -200,8 +222,320 @@ const GSAnalyzer = {
         a.stop_loss = +(lo * (1 - slPct / 100)).toFixed(2);
     },
 
+    // ═══════════════════════════════════════════════════════════
+    // OpenBB-Inspired Advanced Analysis Modules
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * Technical Analysis: MA signals, price position, momentum
+     */
+    _technical(a, sd) {
+        const p = sd.current_price;
+        const ma50 = sd["50_day_avg"];
+        const ma200 = sd["200_day_avg"];
+        const h52 = sd["52_week_high"];
+        const l52 = sd["52_week_low"];
+
+        a.ma50 = ma50; a.ma200 = ma200;
+        const signals = [];
+        let score = 50;
+
+        // MA Cross signals
+        if (ma50 && ma200) {
+            if (ma50 > ma200) {
+                a.ma_cross = "金叉 (Golden Cross)";
+                score += 10;
+                signals.push("50日均线在200日上方，中期趋势看涨");
+            } else {
+                a.ma_cross = "死叉 (Death Cross)";
+                score -= 10;
+                signals.push("50日均线在200日下方，中期趋势看跌");
+            }
+        } else { a.ma_cross = "N/A"; }
+
+        // Price vs MAs
+        if (p && ma50) {
+            const pctAbove50 = ((p - ma50) / ma50) * 100;
+            a.price_vs_ma50 = +pctAbove50.toFixed(1);
+            if (pctAbove50 > 5) { score += 5; signals.push("股价高于50日均线，短期动能强"); }
+            else if (pctAbove50 < -5) { score -= 5; signals.push("股价低于50日均线，短期承压"); }
+        }
+        if (p && ma200) {
+            const pctAbove200 = ((p - ma200) / ma200) * 100;
+            a.price_vs_ma200 = +pctAbove200.toFixed(1);
+            if (pctAbove200 > 10) { score += 5; }
+            else if (pctAbove200 < -10) { score -= 5; }
+        }
+
+        // 52-week position (0-100%, higher = closer to 52w high)
+        if (h52 && l52 && h52 > l52 && p) {
+            const pos = ((p - l52) / (h52 - l52)) * 100;
+            a.price_position_52w = +pos.toFixed(1);
+            if (pos > 90) { signals.push("接近52周高点 (追高风险)"); score -= 3; }
+            else if (pos > 70) { signals.push("处于52周高位区间"); score += 3; }
+            else if (pos < 20) { signals.push("处于52周低位区间 (可能超卖)"); score += 5; }
+            else if (pos < 40) { signals.push("处于52周中低区间"); }
+        }
+
+        // Volatility: 52w range spread
+        if (h52 && l52 && l52 > 0) {
+            a.volatility_52w = +((h52 - l52) / l52 * 100).toFixed(1);
+        }
+
+        // Volume trend
+        if (sd.avg_vol_10d && sd.avg_vol_3m && sd.avg_vol_3m > 0) {
+            const volRatio = sd.avg_vol_10d / sd.avg_vol_3m;
+            a.volume_ratio = +volRatio.toFixed(2);
+            if (volRatio > 1.5) { signals.push("近期成交量放大，关注度提升"); score += 2; }
+            else if (volRatio < 0.6) { signals.push("近期成交量萎缩"); score -= 2; }
+        }
+
+        a.technical_score = +Math.max(0, Math.min(100, score)).toFixed(1);
+        a.technical_signal = score >= 65 ? "看涨" : score >= 55 ? "偏多" : score >= 45 ? "中性" : score >= 35 ? "偏空" : "看跌";
+        a.technical_signals = signals.length ? signals : ["技术面信号均衡"];
+    },
+
+    /**
+     * Advanced Valuation: P/B, P/S, PEG, EV/EBITDA, Fair Value
+     */
+    _valuation(a, sd) {
+        a.pb_ratio = sd.pb_ratio || null;
+        a.ps_ratio = sd.ps_ratio || null;
+        a.pfcf_ratio = sd.pfcf_ratio || null;
+        a.ev_ebitda = sd.ev_ebitda || null;
+        a.eps_ttm = sd.eps_ttm || null;
+
+        // PEG ratio: P/E / EPS growth rate
+        const pe = sd.pe_ratio || sd.forward_pe;
+        const eg = sd.earnings_growth || sd.eps_growth_5y;
+        if (pe && pe > 0 && eg && eg > 0) {
+            a.peg_ratio = +(pe / (eg * 100)).toFixed(2);
+        } else { a.peg_ratio = null; }
+
+        // Valuation scoring
+        let score = 50;
+        const indAvg = GS_CONFIG.INDUSTRY_AVG_PE[a.sector] || 20;
+
+        // P/E component
+        if (pe && pe > 0) {
+            if (pe < indAvg * 0.7) score += 10;
+            else if (pe < indAvg) score += 5;
+            else if (pe > indAvg * 1.5) score -= 10;
+            else if (pe > indAvg * 1.2) score -= 5;
+        }
+        // P/B - below 3 is generally reasonable
+        if (a.pb_ratio != null) {
+            if (a.pb_ratio < 1) score += 8;
+            else if (a.pb_ratio < 3) score += 4;
+            else if (a.pb_ratio > 10) score -= 8;
+            else if (a.pb_ratio > 5) score -= 4;
+        }
+        // PEG - below 1 is attractive
+        if (a.peg_ratio != null) {
+            if (a.peg_ratio < 0.5) score += 10;
+            else if (a.peg_ratio < 1) score += 6;
+            else if (a.peg_ratio < 1.5) score += 2;
+            else if (a.peg_ratio > 3) score -= 8;
+            else if (a.peg_ratio > 2) score -= 4;
+        }
+        // EV/EBITDA - sector-dependent, <12 generally good
+        if (a.ev_ebitda != null && a.ev_ebitda > 0) {
+            if (a.ev_ebitda < 8) score += 8;
+            else if (a.ev_ebitda < 15) score += 3;
+            else if (a.ev_ebitda > 30) score -= 8;
+            else if (a.ev_ebitda > 20) score -= 4;
+        }
+
+        a.valuation_score = +Math.max(0, Math.min(100, score)).toFixed(1);
+        a.valuation_rating = score >= 70 ? "低估" : score >= 55 ? "合理偏低" : score >= 45 ? "合理" : score >= 35 ? "偏高" : "高估";
+
+        // Fair value estimation (earnings-based + growth-adjusted)
+        if (sd.eps_ttm && sd.eps_ttm > 0 && pe && pe > 0) {
+            const growthAdj = eg ? Math.min(Math.max(eg * 100, 0), 30) : 5;
+            const fairPE = Math.min(indAvg * (1 + growthAdj / 100), indAvg * 1.5);
+            a.fair_value = +(sd.eps_ttm * fairPE).toFixed(2);
+            if (sd.current_price > 0) {
+                a.fair_value_gap = +(((a.fair_value - sd.current_price) / sd.current_price) * 100).toFixed(1);
+            }
+        }
+    },
+
+    /**
+     * Quality Score: Profitability, financial strength, growth consistency
+     */
+    _quality(a, sd) {
+        let score = 0;
+        let count = 0;
+        const details = {};
+
+        // Profitability (max 35 pts)
+        let profitScore = 0;
+        const roe = sd.roe ? (sd.roe < 1 ? sd.roe * 100 : sd.roe) : null;
+        if (roe != null) {
+            profitScore += roe > 25 ? 12 : roe > 15 ? 9 : roe > 10 ? 6 : roe > 0 ? 3 : 0;
+            count++;
+        }
+        const roa = sd.roa ? (sd.roa < 1 ? sd.roa * 100 : sd.roa) : null;
+        if (roa != null) {
+            profitScore += roa > 15 ? 8 : roa > 8 ? 6 : roa > 4 ? 4 : roa > 0 ? 2 : 0;
+            count++;
+        }
+        const gm = sd.gross_margin ? (sd.gross_margin < 1 ? sd.gross_margin * 100 : sd.gross_margin) : null;
+        if (gm != null) {
+            profitScore += gm > 60 ? 8 : gm > 40 ? 6 : gm > 25 ? 4 : gm > 10 ? 2 : 0;
+            count++;
+        }
+        const npm = sd.profit_margin ? (sd.profit_margin < 1 ? sd.profit_margin * 100 : sd.profit_margin) : null;
+        if (npm != null) {
+            profitScore += npm > 25 ? 7 : npm > 15 ? 5 : npm > 8 ? 3 : npm > 0 ? 1 : 0;
+            count++;
+        }
+        details.profitability = Math.min(profitScore, 35);
+        score += details.profitability;
+
+        // Financial Strength (max 30 pts)
+        let finScore = 0;
+        const de = sd.debt_to_equity;
+        if (de != null) {
+            const d = de > 10 ? de / 100 : de;
+            finScore += d < 0.3 ? 10 : d < 0.7 ? 7 : d < 1.2 ? 4 : d < 2 ? 2 : 0;
+            count++;
+        }
+        const cr = sd.current_ratio;
+        if (cr != null) {
+            finScore += cr > 2 ? 8 : cr > 1.5 ? 6 : cr > 1 ? 4 : cr > 0.7 ? 2 : 0;
+            count++;
+        }
+        const ic = sd.interest_coverage;
+        if (ic != null) {
+            finScore += ic > 10 ? 7 : ic > 5 ? 5 : ic > 2 ? 3 : ic > 1 ? 1 : 0;
+            count++;
+        }
+        const roic = sd.roic ? (sd.roic < 1 ? sd.roic * 100 : sd.roic) : null;
+        if (roic != null) {
+            finScore += roic > 20 ? 5 : roic > 12 ? 4 : roic > 8 ? 2 : 1;
+            count++;
+        }
+        details.financial_strength = Math.min(finScore, 30);
+        score += details.financial_strength;
+
+        // Growth Consistency (max 35 pts)
+        let growthScore = 0;
+        const rg = sd.revenue_growth != null ? sd.revenue_growth * 100 : null;
+        if (rg != null) {
+            growthScore += rg > 20 ? 10 : rg > 10 ? 7 : rg > 5 ? 5 : rg > 0 ? 3 : 0;
+            count++;
+        }
+        const epsg = sd.earnings_growth != null ? sd.earnings_growth * 100 : null;
+        if (epsg != null) {
+            growthScore += epsg > 25 ? 10 : epsg > 15 ? 7 : epsg > 5 ? 5 : epsg > 0 ? 3 : 0;
+            count++;
+        }
+        const rg5y = sd.revenue_growth_5y != null ? sd.revenue_growth_5y * 100 : null;
+        if (rg5y != null) {
+            growthScore += rg5y > 15 ? 8 : rg5y > 8 ? 6 : rg5y > 3 ? 4 : rg5y > 0 ? 2 : 0;
+            count++;
+        }
+        const fcfg = sd.fcf_cagr_5y != null ? sd.fcf_cagr_5y * 100 : null;
+        if (fcfg != null) {
+            growthScore += fcfg > 15 ? 7 : fcfg > 8 ? 5 : fcfg > 0 ? 3 : 0;
+            count++;
+        }
+        details.growth_consistency = Math.min(growthScore, 35);
+        score += details.growth_consistency;
+
+        a.quality_score = +Math.min(score, 100).toFixed(1);
+        a.quality_details = details;
+        a.quality_rating = score >= 75 ? "优秀" : score >= 55 ? "良好" : score >= 35 ? "一般" : "较差";
+    },
+
+    /**
+     * Cash Flow Analysis: FCF yield, margins, growth
+     */
+    _cashflow(a, sd) {
+        a.fcf_margin = sd.fcf_margin != null ? +(sd.fcf_margin * 100).toFixed(1) : null;
+        a.fcf_per_share = sd.fcf_per_share || null;
+        a.fcf_cagr_5y = sd.fcf_cagr_5y != null ? +(sd.fcf_cagr_5y * 100).toFixed(1) : null;
+        a.cash_per_share = sd.cash_per_share || null;
+
+        // FCF yield = FCF per share / price * 100
+        if (sd.fcf_per_share && sd.current_price > 0) {
+            a.fcf_yield = +((sd.fcf_per_share / sd.current_price) * 100).toFixed(2);
+        } else if (sd.pfcf_ratio && sd.pfcf_ratio > 0) {
+            a.fcf_yield = +(1 / sd.pfcf_ratio * 100).toFixed(2);
+        } else {
+            a.fcf_yield = null;
+        }
+
+        // Cash flow health score
+        let score = 50;
+        if (a.fcf_yield != null) {
+            if (a.fcf_yield > 8) score += 15;
+            else if (a.fcf_yield > 5) score += 10;
+            else if (a.fcf_yield > 3) score += 5;
+            else if (a.fcf_yield < 0) score -= 15;
+        }
+        if (a.fcf_margin != null) {
+            if (a.fcf_margin > 25) score += 12;
+            else if (a.fcf_margin > 15) score += 8;
+            else if (a.fcf_margin > 5) score += 3;
+            else if (a.fcf_margin < 0) score -= 10;
+        }
+        if (a.fcf_cagr_5y != null) {
+            if (a.fcf_cagr_5y > 15) score += 10;
+            else if (a.fcf_cagr_5y > 5) score += 5;
+            else if (a.fcf_cagr_5y < -5) score -= 10;
+        }
+        if (a.cash_per_share && sd.current_price > 0) {
+            const cashPct = (a.cash_per_share / sd.current_price) * 100;
+            if (cashPct > 20) score += 5;
+            else if (cashPct > 10) score += 3;
+        }
+
+        a.cashflow_score = +Math.max(0, Math.min(100, score)).toFixed(1);
+        a.cashflow_rating = score >= 70 ? "强劲" : score >= 55 ? "健康" : score >= 40 ? "一般" : "疲弱";
+    },
+
+    /**
+     * Analyst Consensus from FinnHub recommendation trends
+     */
+    _analyst(a, sd) {
+        const buy = (sd.analyst_strong_buy || 0) + (sd.analyst_buy || 0);
+        const hold = sd.analyst_hold || 0;
+        const sell = (sd.analyst_sell || 0) + (sd.analyst_strong_sell || 0);
+        const total = buy + hold + sell;
+
+        if (total > 0) {
+            a.analyst_total = total;
+            a.analyst_buy = buy;
+            a.analyst_hold = hold;
+            a.analyst_sell = sell;
+            a.analyst_strong_buy = sd.analyst_strong_buy || 0;
+            a.analyst_strong_sell = sd.analyst_strong_sell || 0;
+            a.analyst_buy_pct = +((buy / total) * 100).toFixed(0);
+            a.analyst_hold_pct = +((hold / total) * 100).toFixed(0);
+            a.analyst_sell_pct = +((sell / total) * 100).toFixed(0);
+
+            // Consensus score (0-100)
+            const weightedScore = ((sd.analyst_strong_buy || 0) * 100 + (sd.analyst_buy || 0) * 75 +
+                hold * 50 + (sd.analyst_sell || 0) * 25 + (sd.analyst_strong_sell || 0) * 0) / total;
+            a.analyst_score = +weightedScore.toFixed(1);
+            a.analyst_consensus = weightedScore >= 75 ? "强烈买入" : weightedScore >= 60 ? "买入" :
+                weightedScore >= 45 ? "持有" : weightedScore >= 30 ? "减持" : "卖出";
+            a.analyst_period = sd.analyst_period || null;
+        } else {
+            a.analyst_total = 0;
+            a.analyst_consensus = "无数据";
+            a.analyst_score = null;
+        }
+    },
+
+    /**
+     * Enhanced Composite Score incorporating all modules
+     */
     _composite(a) {
         let s = 50;
+        // Original factors
         if (a.pe_discount_pct != null) s += Math.min(Math.max(a.pe_discount_pct / 2, -15), 15);
         if (a.revenue_5y_cagr != null) s += Math.min(Math.max(a.revenue_5y_cagr / 2, -10), 15);
         if (a.de_health_score != null) s += Math.min(Math.max((a.de_health_score - 50) / 5, -10), 10);
@@ -210,6 +544,14 @@ const GSAnalyzer = {
         if (a.upside_pct != null) s += Math.min(Math.max(a.upside_pct / 5, -5), 10);
         if (a.dividend_yield > 1.5 && a.dividend_sustainability_score > 60) s += Math.min(a.dividend_yield, 5);
         if (a.roe) { const r = a.roe < 1 ? a.roe*100 : a.roe; if (r > 20) s += 5; else if (r > 15) s += 3; }
+
+        // New factors from advanced modules
+        if (a.technical_score != null) s += Math.min(Math.max((a.technical_score - 50) / 6, -6), 6);
+        if (a.valuation_score != null) s += Math.min(Math.max((a.valuation_score - 50) / 6, -6), 6);
+        if (a.quality_score != null) s += Math.min(Math.max((a.quality_score - 50) / 6, -6), 6);
+        if (a.cashflow_score != null) s += Math.min(Math.max((a.cashflow_score - 50) / 6, -6), 6);
+        if (a.analyst_score != null) s += Math.min(Math.max((a.analyst_score - 50) / 8, -5), 5);
+
         a.composite_score = +Math.min(Math.max(s, 0), 100).toFixed(1);
         a.recommendation = s >= 75 ? "强烈推荐买入" : s >= 65 ? "推荐买入" : s >= 55 ? "建议关注" : s >= 45 ? "中性/持有" : s >= 35 ? "谨慎观望" : "不推荐";
     },
@@ -223,21 +565,16 @@ function runScreeningWithData(stockData, opts) {
     const params = GS_CONFIG.RISK_PARAMS[opts.risk] || GS_CONFIG.RISK_PARAMS["medium-high"];
     const stocks = Object.values(stockData);
 
-    // Filter by sector if specified
     let universe = opts.sectors && opts.sectors.length
         ? stocks.filter(s => opts.sectors.includes(s.sector))
         : stocks;
 
-    // Analyze and attach source metadata
     let results = universe.map(sd => {
         const a = GSAnalyzer.analyze(sd);
-        if (a) {
-            a._source = sd; // Attach source data for live/cached/sample badge
-        }
+        if (a) { a._source = sd; }
         return a;
     }).filter(Boolean);
 
-    // Apply filters
     results = results.filter(a => {
         if (a.market_cap_billions && a.market_cap_billions < params.min_mcap) return false;
         if (a.pe_ratio != null) { if (a.pe_ratio < params.min_pe || a.pe_ratio > params.max_pe || a.pe_ratio < 0) return false; }

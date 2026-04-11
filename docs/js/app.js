@@ -53,61 +53,14 @@
         const dot = $(".status-dot");
         const text = $("#dataStatusText");
         const timeEl = $("#lastUpdateTime");
-
-        if (LiveData.hasApiKey()) {
-            dot.className = "status-dot online";
-            text.textContent = "实时模式 — FinnHub API 已连接";
-        } else {
-            dot.className = "status-dot offline";
-            text.textContent = "离线模式 — 使用内置样本数据";
-        }
-
+        dot.className = "status-dot online";
+        text.textContent = "实时模式 — FinnHub API";
         const lastUpdate = LiveData.getLastUpdateTime();
-        if (lastUpdate) {
-            timeEl.textContent = "最后更新: " + fmtTime(lastUpdate);
-        }
+        if (lastUpdate) timeEl.textContent = "最后更新: " + fmtTime(lastUpdate);
     }
-
-    // ─── API Key Management ──────────────────────────────────
-    function initApiKey() {
-        const input = $("#apiKeyInput");
-        const saved = LiveData.getApiKey();
-        if (saved) input.value = saved;
-        updateDataStatus();
-    }
-
-    $("#saveKeyBtn").addEventListener("click", async () => {
-        const key = $("#apiKeyInput").value.trim();
-        const valEl = $("#keyValidation");
-
-        if (!key) {
-            LiveData.setApiKey("");
-            valEl.className = "key-validation";
-            valEl.textContent = "API Key 已清除，将使用样本数据";
-            updateDataStatus();
-            return;
-        }
-
-        valEl.className = "key-validation checking";
-        valEl.textContent = "正在验证 API Key...";
-        $(".status-dot").className = "status-dot loading";
-
-        const valid = await LiveData.validateKey(key);
-        if (valid) {
-            LiveData.setApiKey(key);
-            valEl.className = "key-validation valid";
-            valEl.textContent = "API Key 验证成功！筛选时将使用实时数据。";
-        } else {
-            valEl.className = "key-validation invalid";
-            valEl.textContent = "API Key 无效或网络错误，请检查后重试。";
-        }
-        updateDataStatus();
-    });
 
     $("#clearCacheBtn").addEventListener("click", () => {
         LiveData.clearAllCache();
-        $("#keyValidation").className = "key-validation";
-        $("#keyValidation").textContent = "缓存已清除";
         updateDataStatus();
     });
 
@@ -252,6 +205,11 @@
             renderSummaryCards({ total: results.length, avg_score: avgScore, avg_risk: avgRisk, avg_upside: avgUpside });
             renderTop3(results);
             renderSummaryTable(results);
+            renderTechnicalTable(results);
+            renderValuationTable(results);
+            renderQualityTable(results);
+            renderCashflowTable(results);
+            renderAnalystTable(results);
             renderPETable(results);
             renderGrowthTable(results);
             renderDebtTable(results);
@@ -260,6 +218,7 @@
             renderTargetTable(results);
             renderRiskTable(results);
             renderEntryTable(results);
+            renderRadarSection(results);
             renderSectorAlloc(sectorAlloc);
 
             $("#loadingPanel").style.display = "none";
@@ -309,18 +268,105 @@
             <td><span class="${recClass(s.recommendation)}" style="padding:2px 6px;border-radius:3px;font-size:0.78rem">${s.recommendation}</span></td>
             <td>${fmt(s.risk_score,1)}/10</td>
             <td class="${(s.upside_pct||0)>0?"positive":"negative"}">${fmtPct(s.upside_pct)}</td>
-            <td><span class="moat-badge ${moatClass(s.moat_rating)}">${s.moat_rating||"N/A"}</span></td></tr>`).join("");
+            <td><span class="moat-badge ${moatClass(s.moat_rating)}">${s.moat_rating||"N/A"}</span></td>
+            <td>${makeScoreBar(s.quality_score)}</td>
+            <td style="color:${scoreColor(s.technical_score)}">${s.technical_signal||"N/A"}</td></tr>`).join("");
         tb.querySelectorAll("tr").forEach(tr => tr.addEventListener("click", () => showDetail(currentResults[+tr.dataset.idx])));
     }
 
     function renderPETable(r) { $("#peTable tbody").innerHTML = r.map(s => `<tr><td style="color:var(--gs-blue);font-weight:700">${s.ticker}</td><td>${fmt(s.pe_ratio,1)}</td><td>${fmt(s.forward_pe,1)}</td><td>${fmt(s.industry_avg_pe,1)}</td><td class="${(s.pe_discount_pct||0)>0?"positive":"negative"}">${fmtPct(s.pe_discount_pct)}</td><td>${s.pe_vs_industry||"N/A"}</td></tr>`).join(""); }
-    function renderGrowthTable(r) { $("#growthTable tbody").innerHTML = r.map(s => { const rv = s.annual_revenues && s.revenue_years ? s.revenue_years.slice(-3).map((y,i) => { const v = s.annual_revenues.slice(-3)[i]; return v ? y+":"+(v/1e9).toFixed(1)+"B" : ""; }).filter(Boolean).join(" → ") : "N/A"; return `<tr><td style="color:var(--gs-blue);font-weight:700">${s.ticker}</td><td class="${(s.revenue_5y_cagr||0)>=0?"positive":"negative"}">${fmtPct(s.revenue_5y_cagr)}</td><td>${s.revenue_trend||"N/A"}</td><td class="dim">${rv}</td></tr>`; }).join(""); }
-    function renderDebtTable(r) { $("#debtTable tbody").innerHTML = r.map(s => `<tr><td style="color:var(--gs-blue);font-weight:700">${s.ticker}</td><td>${s.debt_to_equity!=null?fmt(s.debt_to_equity,2)+"x":"N/A"}</td><td>${s.de_health||"N/A"}</td><td>${s.de_health_score!=null?makeScoreBar(s.de_health_score):"N/A"}</td><td>${fmt(s.current_ratio,2)}</td></tr>`).join(""); }
-    function renderDividendTable(r) { $("#dividendTable tbody").innerHTML = r.map(s => `<tr><td style="color:var(--gs-blue);font-weight:700">${s.ticker}</td><td>${s.dividend_yield?fmt(s.dividend_yield,2)+"%":"0.00%"}</td><td>${s.payout_ratio!=null?fmt(s.payout_ratio,1)+"%":"N/A"}</td><td>${s.dividend_sustainability||"N/A"}</td><td>${s.dividend_sustainability_score!=null?makeScoreBar(s.dividend_sustainability_score):"N/A"}</td></tr>`).join(""); }
+    function renderGrowthTable(r) { $("#growthTable tbody").innerHTML = r.map(s => { const rv = s.annual_revenues && s.revenue_years ? s.revenue_years.slice(-3).map((y,i) => { const v = s.annual_revenues.slice(-3)[i]; return v ? y+":"+(v/1e9).toFixed(1)+"B" : ""; }).filter(Boolean).join(" → ") : "N/A"; return `<tr><td style="color:var(--gs-blue);font-weight:700">${s.ticker}</td><td class="${(s.revenue_5y_cagr||0)>=0?"positive":"negative"}">${fmtPct(s.revenue_5y_cagr)}</td><td>${fmtPct(s.eps_growth_3y)}</td><td>${fmtPct(s.eps_growth_5y)}</td><td>${s.revenue_trend||"N/A"}</td><td class="dim">${rv}</td></tr>`; }).join(""); }
+    function renderDebtTable(r) { $("#debtTable tbody").innerHTML = r.map(s => `<tr><td style="color:var(--gs-blue);font-weight:700">${s.ticker}</td><td>${s.debt_to_equity!=null?fmt(s.debt_to_equity,2)+"x":"N/A"}</td><td>${s.de_health||"N/A"}</td><td>${s.de_health_score!=null?makeScoreBar(s.de_health_score):"N/A"}</td><td>${fmt(s.current_ratio,2)}</td><td>${fmt(s.quick_ratio,2)}</td><td>${s.interest_coverage!=null?fmt(s.interest_coverage,1)+"x":"N/A"}</td></tr>`).join(""); }
+    function renderDividendTable(r) { $("#dividendTable tbody").innerHTML = r.map(s => `<tr><td style="color:var(--gs-blue);font-weight:700">${s.ticker}</td><td>${s.dividend_yield?fmt(s.dividend_yield,2)+"%":"0.00%"}</td><td>${s.payout_ratio!=null?fmt(s.payout_ratio,1)+"%":"N/A"}</td><td>${s.dividend_sustainability||"N/A"}</td><td>${s.dividend_sustainability_score!=null?makeScoreBar(s.dividend_sustainability_score):"N/A"}</td><td>${fmtPct(s.dividend_growth_5y)}</td></tr>`).join(""); }
     function renderMoatTable(r) { $("#moatTable tbody").innerHTML = r.map(s => { const f=s.moat_factors||{}; return `<tr><td style="color:var(--gs-blue);font-weight:700">${s.ticker}</td><td><span class="moat-badge ${moatClass(s.moat_rating)}">${s.moat_rating}</span></td><td>${fmt(s.moat_score,0)}</td><td>${fmt(f.brand_strength,0)}</td><td>${fmt(f.switching_costs,0)}</td><td>${fmt(f.network_effects,0)}</td><td>${fmt(f.cost_advantage,0)}</td><td>${fmt(f.market_dominance,0)}</td></tr>`; }).join(""); }
     function renderTargetTable(r) { $("#targetTable tbody").innerHTML = r.map(s => `<tr><td style="color:var(--gs-blue);font-weight:700">${s.ticker}</td><td>${fmtPrice(s.current_price)}</td><td class="negative">${fmtPrice(s.bear_target)}</td><td>${fmtPrice(s.base_target)}</td><td class="positive">${fmtPrice(s.bull_target)}</td><td class="negative">${fmtPct(s.downside_pct)}</td><td class="positive">${fmtPct(s.upside_pct)}</td></tr>`).join(""); }
     function renderRiskTable(r) { $("#riskTable tbody").innerHTML = r.map(s => `<tr><td style="color:var(--gs-blue);font-weight:700">${s.ticker}</td><td>${fmt(s.risk_score,1)}/10</td><td>${s.risk_rating}</td><td>${fmt(s.beta,2)}</td><td class="dim">${s.risk_factors?s.risk_factors[0]:"N/A"}</td></tr>`).join(""); }
     function renderEntryTable(r) { $("#entryTable tbody").innerHTML = r.map(s => `<tr><td style="color:var(--gs-blue);font-weight:700">${s.ticker}</td><td>${fmtPrice(s.current_price)}</td><td class="positive">${fmtPrice(s.entry_price_low)}</td><td class="positive">${fmtPrice(s.entry_price_high)}</td><td class="negative">${fmtPrice(s.stop_loss)}</td><td class="negative">${s.stop_loss_pct!=null?s.stop_loss_pct+"%":"N/A"}</td></tr>`).join(""); }
+
+    // ─── New Analysis Tab Renderers ─────────────────────────
+    function renderTechnicalTable(r) {
+        $("#technicalTable tbody").innerHTML = r.map(s => `<tr>
+            <td style="color:var(--gs-blue);font-weight:700">${s.ticker}</td>
+            <td>${makeScoreBar(s.technical_score)}</td>
+            <td style="color:${scoreColor(s.technical_score)};font-weight:600">${s.technical_signal||"N/A"}</td>
+            <td>${s.ma_cross||"N/A"}</td>
+            <td class="${(s.price_vs_ma50||0)>=0?"positive":"negative"}">${fmtPct(s.price_vs_ma50)}</td>
+            <td class="${(s.price_vs_ma200||0)>=0?"positive":"negative"}">${fmtPct(s.price_vs_ma200)}</td>
+            <td>${s.price_position_52w!=null?fmt(s.price_position_52w,0)+"%":"N/A"}</td>
+            <td>${s.volatility_52w!=null?fmt(s.volatility_52w,0)+"%":"N/A"}</td>
+            <td>${s.volume_ratio!=null?fmt(s.volume_ratio,2)+"x":"N/A"}</td></tr>`).join("");
+    }
+    function renderValuationTable(r) {
+        $("#valuationTable tbody").innerHTML = r.map(s => `<tr>
+            <td style="color:var(--gs-blue);font-weight:700">${s.ticker}</td>
+            <td>${makeScoreBar(s.valuation_score)}</td>
+            <td style="font-weight:600">${s.valuation_rating||"N/A"}</td>
+            <td>${fmt(s.pe_ratio,1)}</td>
+            <td>${fmt(s.pb_ratio,1)}</td>
+            <td>${fmt(s.ps_ratio,1)}</td>
+            <td>${s.peg_ratio!=null?fmt(s.peg_ratio,2):"N/A"}</td>
+            <td>${s.ev_ebitda!=null?fmt(s.ev_ebitda,1):"N/A"}</td>
+            <td>${s.fair_value!=null?fmtPrice(s.fair_value):"N/A"}</td>
+            <td class="${(s.fair_value_gap||0)>=0?"positive":"negative"}">${fmtPct(s.fair_value_gap)}</td></tr>`).join("");
+    }
+    function renderQualityTable(r) {
+        $("#qualityTable tbody").innerHTML = r.map(s => {
+            const d = s.quality_details||{};
+            const fmtR = v => v!=null?(v<1?fmt(v*100,1):fmt(v,1))+"%":"N/A";
+            return `<tr>
+            <td style="color:var(--gs-blue);font-weight:700">${s.ticker}</td>
+            <td>${makeScoreBar(s.quality_score)}</td>
+            <td style="font-weight:600">${s.quality_rating||"N/A"}</td>
+            <td>${d.profitability!=null?d.profitability+"/35":"N/A"}</td>
+            <td>${d.financial_strength!=null?d.financial_strength+"/30":"N/A"}</td>
+            <td>${d.growth_consistency!=null?d.growth_consistency+"/35":"N/A"}</td>
+            <td>${fmtR(s.roe)}</td><td>${fmtR(s.roa)}</td>
+            <td>${s.roic!=null?fmtR(s.roic):"N/A"}</td></tr>`;
+        }).join("");
+    }
+    function renderCashflowTable(r) {
+        $("#cashflowTable tbody").innerHTML = r.map(s => `<tr>
+            <td style="color:var(--gs-blue);font-weight:700">${s.ticker}</td>
+            <td>${makeScoreBar(s.cashflow_score)}</td>
+            <td style="font-weight:600">${s.cashflow_rating||"N/A"}</td>
+            <td class="${(s.fcf_yield||0)>0?"positive":"negative"}">${s.fcf_yield!=null?fmt(s.fcf_yield,2)+"%":"N/A"}</td>
+            <td>${s.fcf_margin!=null?fmt(s.fcf_margin,1)+"%":"N/A"}</td>
+            <td class="${(s.fcf_cagr_5y||0)>=0?"positive":"negative"}">${fmtPct(s.fcf_cagr_5y)}</td>
+            <td>${s.cash_per_share!=null?fmtPrice(s.cash_per_share):"N/A"}</td>
+            <td>${s.fcf_per_share!=null?fmtPrice(s.fcf_per_share):"N/A"}</td></tr>`).join("");
+    }
+    function renderAnalystTable(r) {
+        $("#analystTable tbody").innerHTML = r.map(s => {
+            if (!s.analyst_total) return `<tr><td style="color:var(--gs-blue);font-weight:700">${s.ticker}</td><td colspan="8" class="dim">无分析师数据</td></tr>`;
+            const buyBar = s.analyst_buy_pct||0;
+            return `<tr>
+            <td style="color:var(--gs-blue);font-weight:700">${s.ticker}</td>
+            <td style="font-weight:600;color:${scoreColor(s.analyst_score)}">${s.analyst_consensus}</td>
+            <td>${fmt(s.analyst_score,0)}/100</td>
+            <td class="positive">${s.analyst_strong_buy||0}</td>
+            <td class="positive">${s.analyst_buy - (s.analyst_strong_buy||0)}</td>
+            <td>${s.analyst_hold||0}</td>
+            <td class="negative">${s.analyst_sell - (s.analyst_strong_sell||0)}</td>
+            <td class="negative">${s.analyst_strong_sell||0}</td>
+            <td><span class="score-bar"><span class="score-bar-bg"><span class="score-bar-fill" style="width:${buyBar}%;background:var(--gs-green)"></span></span> ${buyBar}%</span></td></tr>`;
+        }).join("");
+    }
+    function renderRadarSection(results) {
+        const el = $("#radarSection");
+        if (!el) return;
+        el.innerHTML = results.slice(0, 8).map(s => {
+            const dims = [
+                { label: "综合", value: s.composite_score||0 },
+                { label: "估值", value: s.valuation_score||0 },
+                { label: "质量", value: s.quality_score||0 },
+                { label: "技术", value: s.technical_score||0 },
+                { label: "现金流", value: s.cashflow_score||0 },
+                { label: "护城河", value: s.moat_score||0 },
+            ];
+            const bars = dims.map(d => `<div class="radar-bar-row"><span class="radar-dim">${d.label}</span><div class="radar-bar-bg"><div class="radar-bar-fill" style="width:${d.value}%;background:${scoreColor(d.value)}"></div></div><span class="radar-val">${fmt(d.value,0)}</span></div>`).join("");
+            return `<div class="radar-card"><div class="radar-header"><span class="radar-ticker">${s.ticker}</span><span class="radar-rec ${recClass(s.recommendation)}">${s.recommendation}</span></div>${bars}</div>`;
+        }).join("");
+    }
 
     function renderSectorAlloc(sectors) {
         const total = Object.values(sectors).reduce((a,b)=>a+b,0);
@@ -395,5 +441,5 @@
     }
 
     // ─── Init ────────────────────────────────────────────────
-    initApiKey();
+    updateDataStatus();
 })();
