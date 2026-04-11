@@ -20,39 +20,23 @@
         </div>
     </header>
     <main class="container">
-        <!-- Data Source Configuration -->
+        <!-- Data Status Bar -->
         <section class="panel data-source-panel">
-            <h2 class="panel-title">数据源配置 / Data Source</h2>
             <div class="data-source-status" id="dataSourceStatus">
-                <span class="status-dot offline"></span>
-                <span id="dataStatusText">离线模式 — 使用内置样本数据</span>
+                <span class="status-dot online"></span>
+                <span id="dataStatusText">实时模式 — FinnHub API</span>
                 <span class="last-update" id="lastUpdateTime"></span>
-            </div>
-            <div class="api-key-section">
-                <div class="form-grid" style="grid-template-columns: 1fr auto auto;">
-                    <div class="form-group">
-                        <label>FinnHub API Key（<a href="https://finnhub.io/register" target="_blank" style="color:var(--gs-blue)">免费注册获取</a>）</label>
-                        <input type="password" id="apiKeyInput" placeholder="输入 API Key 启用实时数据..." value="">
-                    </div>
-                    <div class="form-group" style="align-self:end">
-                        <button type="button" class="btn-secondary" id="saveKeyBtn">保存并验证</button>
-                    </div>
-                    <div class="form-group" style="align-self:end">
-                        <button type="button" class="btn-secondary btn-outline" id="clearCacheBtn">清除缓存</button>
-                    </div>
-                </div>
-                <div id="keyValidation" class="key-validation"></div>
             </div>
             <div class="refresh-controls">
                 <label class="toggle-label">
-                    <input type="checkbox" id="autoRefreshToggle"> 自动刷新
+                    <input type="checkbox" id="autoRefreshToggle" checked> 自动刷新
                 </label>
                 <select id="refreshInterval" style="width:auto;padding:4px 8px;font-size:0.82rem;background:var(--gs-darker);border:1px solid var(--gs-panel-border);border-radius:4px;color:var(--gs-text);">
-                    <option value="60">每1分钟</option>
                     <option value="300" selected>每5分钟</option>
                     <option value="600">每10分钟</option>
                     <option value="1800">每30分钟</option>
                 </select>
+                <button type="button" class="btn-secondary btn-outline btn-sm" id="clearCacheBtn">清除缓存</button>
                 <span class="dim" style="font-size:0.78rem;margin-left:0.5rem" id="refreshCountdown"></span>
             </div>
         </section>
@@ -99,27 +83,66 @@
                 <h2>股票筛选研究报告</h2><p class="report-subtitle">EQUITY SCREENING REPORT</p>
                 <div class="report-meta" id="reportMeta"></div>
             </section>
+
+            <!-- Multi-Dimensional Score Dashboard -->
             <section class="panel"><h2 class="panel-title">执行摘要 / Executive Summary</h2><div class="summary-cards" id="summaryCards"></div><div class="top3-list" id="top3List"></div></section>
-            <section class="panel"><h2 class="panel-title">综合汇总表 / Screening Summary</h2><div class="table-wrapper"><table class="gs-table" id="summaryTable"><thead><tr><th>#</th><th>代码</th><th>公司名称</th><th>行业</th><th>现价($)</th><th>综合分</th><th>推荐</th><th>风险</th><th>上行%</th><th>护城河</th></tr></thead><tbody></tbody></table></div></section>
+
+            <!-- Comprehensive Summary Table -->
+            <section class="panel"><h2 class="panel-title">综合汇总表 / Screening Summary</h2><div class="table-wrapper"><table class="gs-table" id="summaryTable"><thead><tr><th>#</th><th>代码</th><th>公司名称</th><th>行业</th><th>现价($)</th><th>综合分</th><th>推荐</th><th>风险</th><th>上行%</th><th>护城河</th><th>质量</th><th>技术</th></tr></thead><tbody></tbody></table></div></section>
+
+            <!-- Analysis Tabs -->
             <section class="panel">
                 <div class="tabs">
-                    <button class="tab active" data-tab="peTab">P/E 估值</button><button class="tab" data-tab="growthTab">收入增长</button><button class="tab" data-tab="debtTab">债务健康</button><button class="tab" data-tab="dividendTab">股息分析</button><button class="tab" data-tab="moatTab">竞争护城河</button><button class="tab" data-tab="targetTab">目标价</button><button class="tab" data-tab="riskTab">风险评级</button><button class="tab" data-tab="entryTab">入场/止损</button>
+                    <button class="tab active" data-tab="technicalTab">技术分析</button>
+                    <button class="tab" data-tab="valuationTab">多维估值</button>
+                    <button class="tab" data-tab="qualityTab">质量评分</button>
+                    <button class="tab" data-tab="cashflowTab">现金流</button>
+                    <button class="tab" data-tab="analystTab">分析师</button>
+                    <button class="tab" data-tab="peTab">P/E 估值</button>
+                    <button class="tab" data-tab="growthTab">收入增长</button>
+                    <button class="tab" data-tab="debtTab">债务健康</button>
+                    <button class="tab" data-tab="dividendTab">股息分析</button>
+                    <button class="tab" data-tab="moatTab">竞争护城河</button>
+                    <button class="tab" data-tab="targetTab">目标价</button>
+                    <button class="tab" data-tab="riskTab">风险评级</button>
+                    <button class="tab" data-tab="entryTab">入场/止损</button>
                 </div>
-                <div class="tab-content active" id="peTab"><div class="table-wrapper"><table class="gs-table" id="peTable"><thead><tr><th>代码</th><th>当前P/E</th><th>远期P/E</th><th>行业均值</th><th>溢价/折价</th><th>估值判断</th></tr></thead><tbody></tbody></table></div></div>
-                <div class="tab-content" id="growthTab"><div class="table-wrapper"><table class="gs-table" id="growthTable"><thead><tr><th>代码</th><th>5年CAGR</th><th>增长趋势</th><th>近年收入趋势</th></tr></thead><tbody></tbody></table></div></div>
-                <div class="tab-content" id="debtTab"><div class="table-wrapper"><table class="gs-table" id="debtTable"><thead><tr><th>代码</th><th>债务/权益比</th><th>健康状态</th><th>健康分数</th><th>流动比率</th></tr></thead><tbody></tbody></table></div></div>
-                <div class="tab-content" id="dividendTab"><div class="table-wrapper"><table class="gs-table" id="dividendTable"><thead><tr><th>代码</th><th>股息率</th><th>派息比率</th><th>可持续性</th><th>可持续分数</th></tr></thead><tbody></tbody></table></div></div>
+
+                <!-- Technical Analysis (NEW) -->
+                <div class="tab-content active" id="technicalTab"><div class="table-wrapper"><table class="gs-table" id="technicalTable"><thead><tr><th>代码</th><th>技术评分</th><th>信号</th><th>MA交叉</th><th>价格vs50MA</th><th>价格vs200MA</th><th>52周位置</th><th>波动率</th><th>量比</th></tr></thead><tbody></tbody></table></div></div>
+
+                <!-- Multi-Factor Valuation (NEW) -->
+                <div class="tab-content" id="valuationTab"><div class="table-wrapper"><table class="gs-table" id="valuationTable"><thead><tr><th>代码</th><th>估值评分</th><th>估值判断</th><th>P/E</th><th>P/B</th><th>P/S</th><th>PEG</th><th>EV/EBITDA</th><th>公允价值</th><th>偏离%</th></tr></thead><tbody></tbody></table></div></div>
+
+                <!-- Quality Score (NEW) -->
+                <div class="tab-content" id="qualityTab"><div class="table-wrapper"><table class="gs-table" id="qualityTable"><thead><tr><th>代码</th><th>质量评分</th><th>评级</th><th>盈利能力</th><th>财务强度</th><th>增长持续</th><th>ROE</th><th>ROA</th><th>ROIC</th></tr></thead><tbody></tbody></table></div></div>
+
+                <!-- Cash Flow (NEW) -->
+                <div class="tab-content" id="cashflowTab"><div class="table-wrapper"><table class="gs-table" id="cashflowTable"><thead><tr><th>代码</th><th>现金流评分</th><th>评级</th><th>FCF收益率</th><th>FCF利润率</th><th>FCF 5年CAGR</th><th>每股现金</th><th>每股FCF</th></tr></thead><tbody></tbody></table></div></div>
+
+                <!-- Analyst Consensus (NEW) -->
+                <div class="tab-content" id="analystTab"><div class="table-wrapper"><table class="gs-table" id="analystTable"><thead><tr><th>代码</th><th>共识</th><th>评分</th><th>强烈买入</th><th>买入</th><th>持有</th><th>卖出</th><th>强烈卖出</th><th>买入占比</th></tr></thead><tbody></tbody></table></div></div>
+
+                <!-- Original tabs -->
+                <div class="tab-content" id="peTab"><div class="table-wrapper"><table class="gs-table" id="peTable"><thead><tr><th>代码</th><th>当前P/E</th><th>远期P/E</th><th>行业均值</th><th>溢价/折价</th><th>估值判断</th></tr></thead><tbody></tbody></table></div></div>
+                <div class="tab-content" id="growthTab"><div class="table-wrapper"><table class="gs-table" id="growthTable"><thead><tr><th>代码</th><th>5年CAGR</th><th>EPS增长3Y</th><th>EPS增长5Y</th><th>增长趋势</th><th>近年收入趋势</th></tr></thead><tbody></tbody></table></div></div>
+                <div class="tab-content" id="debtTab"><div class="table-wrapper"><table class="gs-table" id="debtTable"><thead><tr><th>代码</th><th>债务/权益比</th><th>健康状态</th><th>健康分数</th><th>流动比率</th><th>速动比率</th><th>利息覆盖</th></tr></thead><tbody></tbody></table></div></div>
+                <div class="tab-content" id="dividendTab"><div class="table-wrapper"><table class="gs-table" id="dividendTable"><thead><tr><th>代码</th><th>股息率</th><th>派息比率</th><th>可持续性</th><th>可持续分数</th><th>5年股息增长</th></tr></thead><tbody></tbody></table></div></div>
                 <div class="tab-content" id="moatTab"><div class="table-wrapper"><table class="gs-table" id="moatTable"><thead><tr><th>代码</th><th>护城河</th><th>综合分</th><th>品牌</th><th>转换成本</th><th>网络效应</th><th>成本优势</th><th>市场主导</th></tr></thead><tbody></tbody></table></div></div>
                 <div class="tab-content" id="targetTab"><div class="table-wrapper"><table class="gs-table" id="targetTable"><thead><tr><th>代码</th><th>现价($)</th><th>看跌目标</th><th>基准目标</th><th>看涨目标</th><th>下行风险</th><th>上行空间</th></tr></thead><tbody></tbody></table></div></div>
                 <div class="tab-content" id="riskTab"><div class="table-wrapper"><table class="gs-table" id="riskTable"><thead><tr><th>代码</th><th>风险评分</th><th>风险等级</th><th>Beta</th><th>主要风险因素</th></tr></thead><tbody></tbody></table></div></div>
                 <div class="tab-content" id="entryTab"><div class="table-wrapper"><table class="gs-table" id="entryTable"><thead><tr><th>代码</th><th>现价($)</th><th>入场低价</th><th>入场高价</th><th>止损价</th><th>止损幅度</th></tr></thead><tbody></tbody></table></div></div>
             </section>
+
+            <!-- Multi-Dimension Radar Summary -->
+            <section class="panel"><h2 class="panel-title">多维评分雷达 / Multi-Dimension Scores</h2><div id="radarSection" class="radar-grid"></div></section>
+
             <section class="panel" id="stockDetailSection" style="display:none;"><h2 class="panel-title">个股详细分析 / Stock Detail</h2><div id="stockDetail"></div></section>
             <section class="panel"><h2 class="panel-title">行业配置 / Sector Allocation</h2><div id="sectorAllocation" class="sector-alloc"></div></section>
             <section class="panel disclaimer-panel"><h3>免责声明 / Disclaimer</h3><p>本报告仅供参考，不构成任何投资建议。所有数据来源于公开市场信息，分析结果基于量化模型，可能存在偏差。投资者应根据自身情况做出独立判断，并承担相应投资风险。过往表现不代表未来收益。</p><p>This report is for informational purposes only and does not constitute investment advice. Past performance is not indicative of future results.</p></section>
         </div>
     </main>
-    <footer class="gs-footer"><p>Goldman Sachs Style Stock Screening Tool | GitHub Pages Edition | For Educational Purposes Only</p></footer>
+    <footer class="gs-footer"><p>Goldman Sachs Style Stock Screening Tool | Powered by FinnHub API | For Educational Purposes Only</p></footer>
     <script src="js/data.js"></script>
     <script src="js/live_data.js"></script>
     <script src="js/analyzer.js"></script>
